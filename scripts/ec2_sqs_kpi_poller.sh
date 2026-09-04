@@ -18,14 +18,12 @@ QUEUE_URL="${QUEUE_URL:-${SQS_QUEUE_URL:-}}"
 BUCKET_NAME="${BUCKET_NAME:-${S3_BUCKET:-}}"
 WORK_DIR="${WORK_DIR:-${PROJECT_ROOT}/data/ec2_queue_kpi_worker}"
 REPORT_DIR="${REPORT_DIR:-${PROJECT_ROOT}/data/kpi_reports}"
+WINDOW_DIR="${WINDOW_DIR:-${PROJECT_ROOT}/data/kpi_reports/windows}"
 
-if [[ -z "${QUEUE_URL}" ]]; then
-  echo "QUEUE_URL is not set. Export SQS_QUEUE_URL or pass it in .env before running this worker." >&2
-  exit 1
-fi
+# Create directories
+mkdir -p "${WORK_DIR}" "${REPORT_DIR}" "${WINDOW_DIR}"
 
-mkdir -p "${WORK_DIR}" "${REPORT_DIR}"
-
+# === KPI TRACKING ===
 python3 << 'PY'
 import json
 import os
@@ -34,6 +32,8 @@ import time
 import traceback
 from pathlib import Path
 from urllib.parse import unquote_plus
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 import boto3
 import pandas as pd
@@ -53,15 +53,119 @@ aws_region = os.environ.get('AWS_REGION', 'ap-south-1')
 bucket_name = os.environ.get('BUCKET_NAME') or os.environ.get('S3_BUCKET')
 work_dir = os.environ.get('WORK_DIR', './data/ec2_queue_kpi_worker')
 report_dir = os.environ.get('REPORT_DIR', './data/kpi_reports')
+window_dir = os.environ.get('WINDOW_DIR', './data/kpi_reports/windows')
 
 sqs = boto3.client("sqs", region_name=aws_region)
 s3 = boto3.client("s3", region_name=aws_region)
 
 work_dir = Path(work_dir)
 report_dir = Path(report_dir)
+window_dir = Path(window_dir)
 work_dir.mkdir(parents=True, exist_ok=True)
 report_dir.mkdir(parents=True, exist_ok=True)
+window_dir.mkdir(parents=True, exist_ok=True)
 
+# KPI Tracker for SQS processing
+class SQSKPITracker:
+    def __init__(self):
+        self.window_stats = defaultdict(lambda: {
+            "files_processed": 0,
+            "by_sensor": defaultdict(int),
+            "latencies_ms": [],
+            "errors": [],
+            "window_start": None,
+            "window_end": None
+        })
+        self.last_processed = {}
+        self.window_size_seconds = 360  # 6 minutes
+
+    def get_6min_window(self):
+        now = datetime.utcnow()
+        base = now.replace(second=0, microsecond=0)
+        window_start_minute = (base.minute // 6) * 6
+        return base.replace(minute=window_start_minute)
+
+    def get_window_key(self):
+        window_start = self.get_6min_window()
+        return window_start.strftime("%Y-%m-%dT%H:%M:00Z")
+
+    def log_processing(self, bucket, key, sensor, success=True, latency_ms=None, error=None):
+        window = self.get_window_key()
+        start, end = self.get_window_range(window)
+
+        if window not in self.window_stats:
+            self.window_stats[window]["window_start"] = start.isoformat() + "Z"
+            self.window_stats[window]["window_end"] = end.isoformat() + "Z"
+
+        if success:
+            self.window_stats[window]["files_processed"] += 1
+            self.window_stats[window]["by_sensor"][sensor] += 1
+            if latency_ms:
+                self.window_stats[window]["latencies_ms"].append(latency_ms)
+        else:
+            self.window_stats[window]["errors"].append({
+                "bucket": bucket,
+                "key": key,
+                "sensor": sensor,
+                "error": str(error)
+            })
+
+        self.last_processed[key] = datetime.utcnow()
+
+    def get_window_range(self, window_key=None):
+        window_start = self.get_6min_window() if window_key is None else datetime.strptime(window_key, "%Y-%m-%dT%H:%M:00Z")
+        return window_start, window_start + timedelta(seconds=self.window_size_seconds)
+
+    def emit_window_report(self, window_key):
+        """Generate and save KPI report for a 6-min window."""
+        if window_key not in self.window_stats:
+            return
+
+        stats = self.window_stats[window_key]
+        latencies = stats.get("latencies_ms", [])
+        latencies.sort()
+        n = len(latencies)
+
+        report = {
+            "report_id": f"sqs_kpi_{window_key}",
+            "processed_at": int(time.time()),
+            "window": {
+                "key": window_key,
+                "start": stats.get("window_start"),
+                "end": stats.get("window_end"),
+                "duration_seconds": self.window_size_seconds
+            },
+            "sqs_processing": {
+                "files_processed": stats.get("files_processed", 0),
+                "by_sensor": dict(stats.get("by_sensor", {})),
+                "errors": stats.get("errors", []),
+                "error_count": len(stats.get("errors", []))
+            },
+            "latency_ms": {
+                "avg": round(sum(latencies) / n, 2) if n > 0 else 0,
+                "p50": latencies[n//2] if n > 0 else 0,
+                "p95": latencies[int(n*0.95)] if n > 0 else 0,
+                "p99": latencies[int(n*0.99)] if n > 0 else 0,
+                "min": latencies[0] if n > 0 else 0,
+                "max": latencies[-1] if n > 0 else 0
+            }
+        }
+
+        report_path = window_dir / f"sqs_{window_key}.json"
+        report_path.write_text(json.dumps(report, indent=2))
+        print(f"[SQS-KPI] Generated window report: {window_key}", flush=True)
+        return report
+
+    def emit_all_reports(self):
+        """Emit reports for all completed windows."""
+        now = datetime.utcnow()
+        for window_key in list(self.window_stats.keys()):
+            start, _ = self.get_window_range(window_key)
+            if (now - start) >= timedelta(seconds=self.window_size_seconds):
+                self.emit_window_report(window_key)
+                del self.window_stats[window_key]
+
+SQS_TRACKER = SQSKPITracker()
 
 def parse_notifications(body: str):
     try:
@@ -84,6 +188,15 @@ def parse_notifications(body: str):
             notifications.append((bucket, unquote_plus(key)))
     return notifications
 
+def infer_sensor_from_key(key: str) -> str:
+    """Infer sensor from S3 key path."""
+    if "BFA8" in key:
+        return "BFA8"
+    elif "BFA3" in key:
+        return "BFA3"
+    elif "BFA12" in key:
+        return "BFA12"
+    return "UNKNOWN"
 
 def compute_file_metrics(csv_path: Path):
     df = pd.read_csv(csv_path)
@@ -115,16 +228,14 @@ def compute_file_metrics(csv_path: Path):
 
     return results
 
-
-def emit_report(summary):
+def emit_combined_report(summary):
+    """Emit combined report for both garage sync and SQS processing."""
     report_path = report_dir / "ec2_queue_kpi_latest.json"
     report_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)
 
-
 def log_failed_message(message_id: str, body: str, error: str):
-    """Persist messages we couldn't process instead of silently dropping
-    them — lets you inspect/replay later without crashing the service."""
+    """Persist messages we couldn't process."""
     failed_dir = report_dir / "failed_messages"
     failed_dir.mkdir(parents=True, exist_ok=True)
     record = {
@@ -136,7 +247,6 @@ def log_failed_message(message_id: str, body: str, error: str):
     (failed_dir / f"{message_id}.json").write_text(
         json.dumps(record, indent=2), encoding="utf-8"
     )
-
 
 print(f"[POLLER] Starting. queue={queue_url} bucket={bucket_name}", flush=True)
 
@@ -157,6 +267,8 @@ while True:
 
     messages = response.get("Messages", [])
     if not messages:
+        # Emit any pending reports
+        SQS_TRACKER.emit_all_reports()
         continue
 
     batch_summary = {
@@ -172,9 +284,6 @@ while True:
         body = message.get("Body", "")
         receipt_handle = message["ReceiptHandle"]
 
-        # Every message gets a delete attempt at the end of this block,
-        # success or failure — a message we can't process should not stay
-        # in the queue forever and crash-loop the whole service.
         try:
             notifications = parse_notifications(body)
             if not notifications:
@@ -190,27 +299,56 @@ while True:
                     continue
 
                 try:
+                    # Track processing start
+                    process_start = time.time()
+
                     local_path = work_dir / Path(key).name
                     s3.download_file(bucket, key, str(local_path))
                     metrics = compute_file_metrics(local_path)
                     seen.add(key)
+
+                    # Infer sensor from key
+                    sensor = infer_sensor_from_key(key)
+
+                    # Track processing
+                    process_end = time.time()
+                    process_latency = (process_end - process_start) * 1000
+
+                    SQS_TRACKER.log_processing(
+                        bucket=bucket,
+                        key=key,
+                        sensor=sensor,
+                        success=True,
+                        latency_ms=int(process_latency)
+                    )
+
                     batch_summary["files_processed"].append({"bucket": bucket, "key": key, **metrics})
                     batch_summary["total_files"] += 1
                     print(f"[POLLER] Processed {key} from {bucket}: {metrics}", flush=True)
                 except ClientError as ce:
-                    # e.g. object doesn't exist (404), no S3 permission, etc.
-                    # Log and move on to the next notification instead of
-                    # crashing the whole process on one bad key.
                     err = f"S3 error for {bucket}/{key}: {ce}"
                     print(f"[POLLER] ✗ {err}", flush=True)
+                    SQS_TRACKER.log_processing(
+                        bucket=bucket,
+                        key=key,
+                        sensor=infer_sensor_from_key(key),
+                        success=False,
+                        error=str(ce)
+                    )
                     log_failed_message(message_id, body, err)
                 except Exception as exc:
                     err = f"Unexpected error for {bucket}/{key}: {exc}\n{traceback.format_exc()}"
                     print(f"[POLLER] ✗ {err}", flush=True)
+                    SQS_TRACKER.log_processing(
+                        bucket=bucket,
+                        key=key,
+                        sensor=infer_sensor_from_key(key),
+                        success=False,
+                        error=str(exc)
+                    )
                     log_failed_message(message_id, body, err)
 
         except Exception as exc:
-            # Malformed message body, unexpected structure, etc.
             err = f"Failed to parse/handle message: {exc}\n{traceback.format_exc()}"
             print(f"[POLLER] ✗ {err}", flush=True)
             log_failed_message(message_id, body, err)
@@ -221,6 +359,10 @@ while True:
             except ClientError as ce:
                 print(f"[POLLER] ✗ Failed to delete message {message_id}: {ce}", flush=True)
 
+    # Emit report for batch
     if batch_summary["files_processed"]:
-        emit_report(batch_summary)
+        emit_combined_report(batch_summary)
+
+    # Emit any completed window reports
+    SQS_TRACKER.emit_all_reports()
 PY
