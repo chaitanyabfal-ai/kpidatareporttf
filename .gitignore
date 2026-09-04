@@ -1,0 +1,36 @@
+# --- Secrets: never commit these ---
+.env
+*.pem
+*.key
+*_rsa
+*_rsa.pub
+credentials.json
+
+# --- Python ---
+__pycache__/
+*.pyc
+.pytest_cache/
+kpi_data/
+.venv/
+venv/
+
+# --- Runtime / bulk data (regenerated at runtime, not source) ---
+data/incoming_csvs/*.csv
+!data/incoming_csvs/BFA3_Batch102_2026-08-31_09-05-00.csv
+!data/incoming_csvs/BFA8_Batch101_2026-08-31_09-00-00.csv
+data/garage_kpi_downloads/
+data/kpi_reports/
+data/ec2_queue_kpi_worker/
+data/logs/*.log
+
+# --- OS / editor ---
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+
+# --- Terraform ---
+infra/terraform/.terraform/
+infra/terraform/terraform.tfstate
+infra/terraform/terraform.tfstate.backup
+infra/terraform/terraform.tfvars
+infra/terraform/*.tfplan

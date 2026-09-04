@@ -1,0 +1,20 @@
+[Unit]
+Description=EC2 SQS KPI Poller Service
+Documentation=file:///home/bfa/ilds_s3_garage_uploader_project/RUNBOOK.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bfa
+WorkingDirectory=/home/bfa/ilds_s3_garage_uploader_project
+Environment="PATH=/home/bfa/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/bfa/ilds_s3_garage_uploader_project/scripts/ec2_sqs_kpi_poller.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ec2-sqs-poller
+
+[Install]
+WantedBy=multi-user.target

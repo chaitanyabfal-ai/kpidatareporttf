@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored —
+# don't commit it if you put anything sensitive in it (this file has none
+# by default, but ec2_key_name / ssh_cidr are worth keeping private).
+
+aws_region = "ap-south-1"
+
+# Leave bucket_name unset to auto-generate as "<account_id>-ilds-sensor-data",
+# or pin an explicit name:
+# bucket_name = "453914763342-ilds-sensor-data"
+
+queue_name = "ilds_queue_1"
+
+# Set to receive email alerts via the (optional) alerts SNS topic:
+# alert_email = "you@example.com"
+
+# EC2 worker — leave false to provision only S3/SNS/SQS/IAM (e.g. for
+# local-only development, see RUNBOOK.md "Without EC2").
+ec2_launch    = false
+# ec2_key_name  = "my-existing-keypair"
+# ssh_cidr      = "203.0.113.4/32"   # restrict to your own IP
