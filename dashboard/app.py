@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -117,6 +118,31 @@ def sensor_frame(reports: list[dict[str, Any]]) -> pd.DataFrame:
     )
 
 
+def reliability_frame(reports: list[dict[str, Any]]) -> pd.DataFrame:
+    """Build one reliability row per sensor from live processed-file metrics."""
+    rows = []
+    for report in reports:
+        for item in report.get("files_processed", []):
+            reliability = item.get("timestamp_reliability", {})
+            if not reliability:
+                continue
+            rows.append(
+                {
+                    "Sensor": item.get("sensor", "UNKNOWN"),
+                    "Samples": reliability.get("sample_count", 0),
+                    "Frequency (Hz)": reliability.get("observed_frequency_hz"),
+                    "Expected interval (sec)": reliability.get("expected_interval_seconds"),
+                    "Max gap (sec)": reliability.get("max_gap_seconds"),
+                    "Arrival delay (sec)": reliability.get("arrival_delay_seconds"),
+                    "Gaps": reliability.get("gap_count", 0),
+                    "Out of order": reliability.get("out_of_order_count", 0),
+                    "Status": reliability.get("timestamp_status", "unknown"),
+                    "Last sample": reliability.get("last_sample_at"),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def format_number(value: float | int) -> str:
     return f"{value:,.0f}"
 
@@ -152,9 +178,13 @@ with header:
     st.markdown("<div class='subtitle'>A live read on sensor delivery, completeness, and pipeline latency.</div>", unsafe_allow_html=True)
 with controls:
     tier = st.selectbox("Report resolution", list(REPORT_DIRS), index=0)
+    auto_refresh = st.checkbox("Auto-refresh live view", value=tier == "Live SQS")
     if st.button("Refresh reports", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+
+if tier == "Live SQS" and auto_refresh:
+    st_autorefresh(interval=30_000, key="live-kpi-refresh")
 
 reports = read_reports(tier)
 frame = report_rows(reports, tier)
@@ -184,6 +214,18 @@ metrics[2].metric("Missing files", format_number(latest["missing"]), delta=delta
 metrics[3].metric("Avg latency", f"{latest['latency_avg']:.0f} ms", delta=delta("latency_avg"), delta_color="inverse")
 metrics[4].metric("P95 latency", f"{latest['latency_p95']:.0f} ms", delta=delta("latency_p95"), delta_color="inverse")
 
+reliability = reliability_frame(reports)
+if not reliability.empty:
+    healthy_count = int((reliability["Status"] == "healthy").sum())
+    stale_count = int((reliability["Status"] == "stale").sum())
+    median_frequency = reliability["Frequency (Hz)"].dropna().median()
+    max_delay = reliability["Arrival delay (sec)"].dropna().max()
+    reliability_metrics = st.columns(4)
+    reliability_metrics[0].metric("Sensors reporting", f"{reliability['Sensor'].nunique()}")
+    reliability_metrics[1].metric("Healthy streams", f"{healthy_count}/{len(reliability)}")
+    reliability_metrics[2].metric("Median frequency", f"{median_frequency:.3f} Hz" if pd.notna(median_frequency) else "n/a")
+    reliability_metrics[3].metric("Max sample delay", f"{max_delay:.1f} sec" if pd.notna(max_delay) else "n/a", delta=f"{stale_count} stale" if stale_count else None, delta_color="inverse")
+
 st.markdown("## Delivery pulse")
 chart_left, chart_right = st.columns([1.65, 1])
 with chart_left:
@@ -206,6 +248,12 @@ with health_right:
         st.caption("No sensor breakdown available.")
     else:
         st.dataframe(sensors, hide_index=True, use_container_width=True, height=260)
+
+st.markdown("## Timestamp reliability")
+if reliability.empty:
+    st.caption("Live SQS reports will show sensor frequency, gaps, ordering, and sample arrival delay here.")
+else:
+    st.dataframe(reliability, hide_index=True, use_container_width=True)
 
 st.markdown("## Recent snapshots")
 recent = frame.tail(12).copy()

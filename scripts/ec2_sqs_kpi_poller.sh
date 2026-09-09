@@ -38,6 +38,7 @@ from collections import defaultdict
 import boto3
 import pandas as pd
 from botocore.exceptions import ClientError
+from scripts.reliability import summarize_timestamp_reliability
 
 # Load .env if present
 env_file = Path('.env')
@@ -210,6 +211,7 @@ def compute_file_metrics(csv_path: Path):
         "max_voltage": None,
         "min_pressure": None,
         "max_pressure": None,
+        "timestamp_reliability": summarize_timestamp_reliability(df),
     }
 
     if "Voltage" in df.columns:

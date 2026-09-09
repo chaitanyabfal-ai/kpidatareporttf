@@ -25,6 +25,11 @@ Recommended placement:
 
 The canonical Python environment name is `kpidatatf`.
 
+Each processed CSV is also evaluated for sensor reliability. The live dashboard
+reports the observed sample frequency, expected interval, timestamp gaps,
+out-of-order samples, last-sample age, and arrival delay. The dashboard can
+auto-refresh the Live SQS view every 30 seconds.
+
 ## 2. Prerequisites
 
 You need:
@@ -347,6 +352,21 @@ Use the report-resolution selector:
 - **Daily**: aggregated reports under `data/kpi_reports/daily/`
 
 Click **Refresh reports** after new report files arrive.
+
+In the **Timestamp reliability** table:
+
+- `Frequency (Hz)` is the inverse of the median interval between sensor timestamps.
+- `Expected interval (sec)` is that median interval.
+- `Max gap (sec)` is the largest positive timestamp interval in the file.
+- `Arrival delay (sec)` is processing time minus the last sensor timestamp.
+- `Gaps` counts intervals larger than 1.5 times the expected interval.
+- `Out of order` counts timestamp values that arrive earlier than the prior row.
+- `stale` means the last sensor timestamp is more than three expected intervals
+  old, with a minimum threshold of 60 seconds.
+
+The dashboard's `Avg latency` and `P95 latency` cards measure S3 download and
+EC2 processing latency. `Arrival delay` measures sensor timestamp freshness;
+these are different signals and should be investigated separately.
 
 ## 8. KPI Report Verification
 
