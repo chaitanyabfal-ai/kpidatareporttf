@@ -1,15 +1,15 @@
 [Unit]
 Description=Garage S3 → AWS S3 Sync Service
-Documentation=file:///home/bfa/ilds_s3_garage_uploader_project/GARAGE_SETUP.md
+Documentation=file:///home/ec2-user/ilds_s3_garage_uploader_project/GARAGE_SETUP.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=bfa
-WorkingDirectory=/home/bfa/ilds_s3_garage_uploader_project
-Environment="PATH=/home/bfa/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
-ExecStart=/home/bfa/ilds_s3_garage_uploader_project/kpi_data/bin/python3 /home/bfa/ilds_s3_garage_uploader_project/scripts/garage_sync.py
+User=ec2-user
+WorkingDirectory=/home/ec2-user/ilds_s3_garage_uploader_project
+Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin/python3 /home/ec2-user/ilds_s3_garage_uploader_project/scripts/garage_sync.py
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
