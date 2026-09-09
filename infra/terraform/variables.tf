@@ -75,5 +75,5 @@ variable "repo_url" {
 variable "deploy_user" {
   description = "Linux user the app runs as on EC2 — must match User= in the systemd unit files."
   type        = string
-  default     = "bfa"
+  default     = "ec2-user"
 }

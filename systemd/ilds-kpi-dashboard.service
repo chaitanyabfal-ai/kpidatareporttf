@@ -1,0 +1,20 @@
+[Unit]
+Description=ILDS Streamlit KPI Dashboard
+Documentation=file:///home/ec2-user/ilds_s3_garage_uploader_project/RUNBOOK.md
+After=network-online.target ec2-sqs-poller.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/ilds_s3_garage_uploader_project
+Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin/streamlit run /home/ec2-user/ilds_s3_garage_uploader_project/dashboard/app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ilds-kpi-dashboard
+
+[Install]
+WantedBy=multi-user.target

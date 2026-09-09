@@ -15,7 +15,9 @@ S3 Event → SNS Topic → SQS Queue
     ↓
 EC2 Poller (KPI processing)
     ↓
-JSON Report: mean/min/max metrics
+    ├── data/kpi_reports/ec2_queue_kpi_latest.json
+    ├── data/kpi_reports/windows/*.json
+    └── KPI aggregator → hourly/daily reports → Streamlit dashboard
 ```
 
 ## Quick Start
@@ -43,11 +45,41 @@ python3 scripts/garage_sync.py --once   # One-time test
 
 See **GARAGE_INTEGRATION_GUIDE.md** for detailed setup.
 
+## KPI Dashboard
+
+The repository includes a Streamlit dashboard for the generated KPI reports.
+It reads `data/kpi_reports/{daily,hourly,windows}` and updates when the report
+files are refreshed.
+
+```bash
+python3 -m pip install -r requirements.txt
+streamlit run dashboard/app.py
+```
+
+Open the local URL printed by Streamlit, then choose the report resolution in
+the upper-right control. The dashboard supports empty report directories and
+will show an empty state until the sync or aggregator has produced reports.
+
+For the cloud deployment, the dashboard runs as a localhost-only systemd
+service on EC2. Use SSM port forwarding to open it locally without exposing
+Streamlit to the public internet:
+
+```bash
+aws ssm start-session \
+    --target <instance-id> \
+    --document-name AWS-StartPortForwardingSession \
+    --parameters '{"portNumber":["8501"],"localPortNumber":["8501"]}'
+```
+
+Then open `http://127.0.0.1:8501`.
+
 ## Components
 
 - **garage_sync.py** — Downloads CSVs from Garage S3 (via Tailscale), uploads to AWS S3
 - **s3_uploader.py** — Validates schema, uploads to AWS S3 with correct prefix
 - **ec2_sqs_kpi_poller.sh** — EC2 worker that polls SQS, computes KPI metrics
+- **kpi_aggregator.py** — Converts six-minute reports into hourly and daily views
+- **dashboard/app.py** — Streamlit dashboard for live SQS, window, hourly, and daily reports
 - **aws_config.py** — Centralized configuration for AWS and Garage endpoints
 - **test_garage_integration.sh** — Verify Tailscale VPN and credentials
 
@@ -77,3 +109,4 @@ ilds_s3_garage_uploader_project/
 ## Runbook
 
 See [RUNBOOK.md](RUNBOOK.md) for the AWS CLI provisioning steps and the local project setup workflow.
+ago

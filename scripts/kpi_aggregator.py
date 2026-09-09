@@ -69,12 +69,24 @@ def aggregate_6min_to_hourly():
 
         for report in reports:
             vol = report.get("ingestion_volume", {})
-            lat = report.get("latency_ms", {}).get("download", {})
+            sqs = report.get("sqs_processing", {})
+            if not vol and sqs:
+                vol = {
+                    "total_files": sqs.get("files_processed", 0),
+                    "failed_files": sqs.get("error_count", 0),
+                    "by_sensor": sqs.get("by_sensor", {}),
+                    "expected_files": 0,
+                    "missing_files_count": sqs.get("error_count", 0),
+                }
+            lat = report.get("latency_ms", {})
+            if "download" in lat:
+                lat = lat["download"]
             comp = report.get("completeness", {})
             sens = report.get("sensor_health", {}).get("by_sensor", {})
 
             hourly_report["ingestion_volume"]["total_files"] += vol.get("total_files", 0)
             hourly_report["ingestion_volume"]["failed_files"] += vol.get("failed_files", 0)
+            failed_files += vol.get("failed_files", 0)
             hourly_report["ingestion_volume"]["expected_files"] += vol.get("expected_files", 0)
             hourly_report["ingestion_volume"]["missing_files_count"] += vol.get("missing_files_count", 0)
 

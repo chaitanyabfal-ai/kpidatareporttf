@@ -15,8 +15,9 @@ This runbook covers the AWS resources required by this project and the local set
 7. [Run the Uploader](#7-run-the-uploader)
 8. [Run the Garage Sync](#8-run-the-garage-sync)
 9. [EC2 Instance Setup](#9-ec2-instance-setup)
-10. [Operational Notes](#10-operational-notes)
-11. [Troubleshooting](#11-troubleshooting)
+10. [Run the Streamlit Dashboard](#10-run-the-streamlit-dashboard)
+11. [Operational Notes](#11-operational-notes)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
@@ -570,7 +571,81 @@ nohup ./scripts/ec2_sqs_kpi_poller.sh > logs/sqs_poller.log 2>&1 &
 
 ---
 
-## 10) Operational Notes
+### 9.5 Verify the cloud ingestion path
+
+The recommended split deployment runs `garage_sync.py` on a host with a
+Tailscale route to Garage, while EC2 runs the SQS poller, KPI aggregator, and
+dashboard. Running `garage-sync` on EC2 requires installing and authenticating
+Tailscale there; a new EC2 instance does not have a Garage route by default.
+
+```text
+Garage S3 -> garage_sync.py -> AWS S3 -> SNS -> SQS -> EC2 poller
+                                                        |
+                                      aggregator <- KPI reports -> dashboard
+```
+
+Verify the chain after uploading a valid sensor CSV:
+
+```bash
+# On the Garage-connected sync host
+./scripts/test_garage_integration.sh
+python3 scripts/garage_sync.py --once
+
+# On EC2, through SSH or an SSM session
+sudo systemctl status garage-sync ec2-sqs-poller ilds-kpi-dashboard ilds-kpi-aggregator.timer
+aws s3 ls "s3://${S3_BUCKET}/" --recursive --region "${AWS_REGION}"
+aws sqs get-queue-attributes \
+  --queue-url "${SQS_QUEUE_URL}" \
+  --attribute-names ApproximateNumberOfMessages \
+  --region "${AWS_REGION}"
+find data/kpi_reports -type f -name '*.json' -print
+```
+
+The poller writes `ec2_queue_kpi_latest.json` and six-minute windows. The
+aggregator timer consumes completed windows every ten minutes and writes
+`hourly/` and `daily/` reports.
+
+## 10) Run the Streamlit Dashboard
+
+### 10.1 Local development
+
+```bash
+source kpi_data/bin/activate
+python -m pip install -r requirements.txt
+streamlit run dashboard/app.py
+```
+
+The dashboard reads `data/kpi_reports/`. Select `Live SQS` for the current EC2
+poller report, `6-minute` for window reports, or `Hourly`/`Daily` for the
+aggregated views. Use `Refresh reports` after new JSON files arrive.
+
+### 10.2 EC2 service
+
+The automated EC2 bootstrap installs and enables `ec2-sqs-poller.service`,
+`ilds-kpi-aggregator.timer`, and `ilds-kpi-dashboard.service`. The dashboard
+binds to `127.0.0.1:8501` only:
+
+```bash
+sudo systemctl status ilds-kpi-dashboard
+sudo journalctl -u ilds-kpi-dashboard -n 100 --no-pager
+curl --fail http://127.0.0.1:8501/_stcore/health
+```
+
+From your workstation, use SSM port forwarding and then open
+`http://127.0.0.1:8501`:
+
+```bash
+aws ssm start-session \
+  --target <instance-id> \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["8501"],"localPortNumber":["8501"]}' \
+  --region ap-south-1
+```
+
+No inbound security-group rule for port 8501 is required. The operator needs
+SSM Session Manager access and the instance needs the SSM agent.
+
+## 11) Operational Notes
 
 ### 10.1 File Naming Convention
 
@@ -623,7 +698,7 @@ KPI Reports: data/kpi_reports/ec2_queue_kpi_latest.json
 
 ---
 
-## 11) Troubleshooting
+## 12) Troubleshooting
 
 ### 11.1 Common Issues and Solutions
 

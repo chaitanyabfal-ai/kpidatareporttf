@@ -9,3 +9,4 @@ s3transfer==0.6.0
 jmespath==1.0.1
 urllib3==1.26.16
 six==1.16.0
+streamlit>=1.39.0

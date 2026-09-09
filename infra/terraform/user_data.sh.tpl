@@ -39,6 +39,11 @@ ENVEOF
 # Install and enable the systemd services shipped in the repo.
 cp /home/${deploy_user}/ilds_s3_garage_uploader_project/systemd/garage-sync.service /etc/systemd/system/
 cp /home/${deploy_user}/ilds_s3_garage_uploader_project/systemd/ec2-sqs-poller.service /etc/systemd/system/
+cp /home/${deploy_user}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-dashboard.service /etc/systemd/system/
+cp /home/${deploy_user}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-aggregator.service /etc/systemd/system/
+cp /home/${deploy_user}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-aggregator.timer /etc/systemd/system/
+sed -i "s#ec2-user#${deploy_user}#g" /etc/systemd/system/garage-sync.service /etc/systemd/system/ec2-sqs-poller.service /etc/systemd/system/ilds-kpi-dashboard.service
+sed -i "s#ec2-user#${deploy_user}#g" /etc/systemd/system/ilds-kpi-aggregator.service
 systemctl daemon-reload
-systemctl enable --now garage-sync
-systemctl enable --now ec2-sqs-poller
+systemctl enable --now garage-sync ec2-sqs-poller ilds-kpi-dashboard
+systemctl enable --now ilds-kpi-aggregator.timer

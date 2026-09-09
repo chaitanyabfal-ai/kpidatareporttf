@@ -41,7 +41,7 @@ EC2_SECURITY_GROUP_NAME="${EC2_SECURITY_GROUP_NAME:-ilds-kpi-sg}"
 EC2_ROLE_NAME="${EC2_ROLE_NAME:-ilds-ec2-role}"
 EC2_INSTANCE_PROFILE_NAME="${EC2_INSTANCE_PROFILE_NAME:-ilds-ec2-profile}"
 REPO_URL="${REPO_URL:-https://github.com/chaitanyabfal-ai/kpidataingestreport.git}"
-DEPLOY_USER="${DEPLOY_USER:-bfa}"          # must match systemd/*.service User=
+DEPLOY_USER="${DEPLOY_USER:-ec2-user}"     # must match systemd/*.service User=
 
 echo "=== ILDS AWS Provisioning ==="
 echo "Account: ${ACCOUNT_ID} | Region: ${AWS_REGION} | Bucket: ${BUCKET_NAME}"
@@ -283,6 +283,17 @@ ENVEOF
 # over Tailscale by default anyway. Set real values via SSM Parameter Store
 # or by editing .env after connecting (see SECURITY.md), then install the
 # systemd units from systemd/ and enable them.
+cp /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project/systemd/garage-sync.service /etc/systemd/system/
+cp /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project/systemd/ec2-sqs-poller.service /etc/systemd/system/
+cp /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-dashboard.service /etc/systemd/system/
+cp /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-aggregator.service /etc/systemd/system/
+cp /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project/systemd/ilds-kpi-aggregator.timer /etc/systemd/system/
+sed -i "s#ec2-user#${DEPLOY_USER}#g" /etc/systemd/system/garage-sync.service /etc/systemd/system/ec2-sqs-poller.service /etc/systemd/system/ilds-kpi-dashboard.service
+sed -i "s#ec2-user#${DEPLOY_USER}#g" /etc/systemd/system/ilds-kpi-aggregator.service
+chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/ilds_s3_garage_uploader_project
+systemctl daemon-reload
+systemctl enable --now garage-sync ec2-sqs-poller ilds-kpi-dashboard
+systemctl enable --now ilds-kpi-aggregator.timer
 USERDATA
 
     INSTANCE_ID="$(aws ec2 run-instances \

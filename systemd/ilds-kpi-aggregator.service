@@ -1,0 +1,11 @@
+[Unit]
+Description=ILDS KPI Report Aggregator
+Documentation=file:///home/ec2-user/ilds_s3_garage_uploader_project/RUNBOOK.md
+After=ec2-sqs-poller.service
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/home/ec2-user/ilds_s3_garage_uploader_project
+Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin/python3 /home/ec2-user/ilds_s3_garage_uploader_project/scripts/kpi_aggregator.py
