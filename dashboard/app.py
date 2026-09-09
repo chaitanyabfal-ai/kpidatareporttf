@@ -171,7 +171,9 @@ previous = frame.iloc[-2] if len(frame) > 1 else None
 
 
 def delta(column: str) -> float | None:
-    return None if previous is None else latest[column] - previous[column]
+    if previous is None:
+        return None
+    return float(latest[column] - previous[column])
 
 
 st.markdown(f"<div class='status'>[ ONLINE ] &nbsp; / &nbsp; {len(frame)} {tier.lower()} snapshots</div>", unsafe_allow_html=True)
