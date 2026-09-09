@@ -8,8 +8,8 @@ Wants=network-online.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/home/ec2-user/ilds_s3_garage_uploader_project
-Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
-ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/kpi_data/bin/streamlit run /home/ec2-user/ilds_s3_garage_uploader_project/dashboard/app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
+Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpidatatf/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/kpidatatf/bin/streamlit run /home/ec2-user/ilds_s3_garage_uploader_project/dashboard/app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

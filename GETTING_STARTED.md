@@ -43,8 +43,8 @@ provisioned — either with the bash script or Terraform, your choice.
 ```bash
 git clone https://github.com/chaitanyabfal-ai/kpidataingestreport.git
 cd kpidataingestreport
-python3 -m venv kpi_data
-source kpi_data/bin/activate      # Windows: kpi_data\Scripts\activate
+python3 -m venv kpidatatf
+source kpidatatf/bin/activate      # Windows: kpidatatf\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
 cp .env.example .env

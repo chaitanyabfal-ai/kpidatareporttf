@@ -60,7 +60,7 @@ echo ""
 
 # 3. Test Garage S3 connection
 echo "3. Testing Garage S3 bucket access..."
-source "${PROJECT_ROOT}/kpi_data/bin/activate"
+source "${PROJECT_ROOT}/kpidatatf/bin/activate"
 
 python3 << 'PYTHON'
 import os

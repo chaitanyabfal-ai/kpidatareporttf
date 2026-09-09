@@ -66,7 +66,7 @@ chmod +x scripts/*.sh
 ./scripts/provision_aws_resources.sh
 
 # Source the virtual environment
-source kpi_data/bin/activate
+source kpidatatf/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -332,14 +332,14 @@ cd /home/bfa/ilds_s3_garage_uploader_project
 
 ### 5.1 Create and Activate Virtual Environment
 
-The workspace already contains a virtual environment at `kpi_data/`, but you can recreate it if needed:
+The workspace uses the `kpidatatf/` virtual environment, but you can recreate it if needed:
 
 ```bash
 # Recreate virtual environment
-python3 -m venv kpi_data
+python3 -m venv kpidatatf
 
 # Activate it
-source kpi_data/bin/activate
+source kpidatatf/bin/activate
 ```
 
 ### 5.2 Install Python Dependencies
@@ -552,8 +552,8 @@ git clone https://github.com/chaitanyabfal-ai/kpidataingestreport.git
 cd ilds_s3_garage_uploader_project
 
 # Setup Python
-python3 -m venv kpi_data
-source kpi_data/bin/activate
+python3 -m venv kpidatatf
+source kpidatatf/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
@@ -610,7 +610,7 @@ aggregator timer consumes completed windows every ten minutes and writes
 ### 10.1 Local development
 
 ```bash
-source kpi_data/bin/activate
+source kpidatatf/bin/activate
 python -m pip install -r requirements.txt
 streamlit run dashboard/app.py
 ```

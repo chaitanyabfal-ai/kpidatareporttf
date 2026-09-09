@@ -6,9 +6,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 # Activate the project venv if present; otherwise fall back to system Python.
-if [[ -f "${PROJECT_ROOT}/kpi_data/bin/activate" ]]; then
+if [[ -f "${PROJECT_ROOT}/kpidatatf/bin/activate" ]]; then
   # shellcheck disable=SC1091
-  source "${PROJECT_ROOT}/kpi_data/bin/activate"
+  source "${PROJECT_ROOT}/kpidatatf/bin/activate"
 fi
 
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"

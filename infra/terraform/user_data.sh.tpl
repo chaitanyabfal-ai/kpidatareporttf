@@ -13,8 +13,8 @@ su - ${deploy_user} -c "
     git clone ${repo_url} ilds_s3_garage_uploader_project
   fi
   cd ilds_s3_garage_uploader_project
-  python3 -m venv kpi_data
-  source kpi_data/bin/activate
+  python3 -m venv kpidatatf
+  source kpidatatf/bin/activate
   pip install --upgrade pip
   pip install -r requirements.txt
   mkdir -p data/incoming_csvs data/garage_kpi_downloads data/kpi_reports data/logs
