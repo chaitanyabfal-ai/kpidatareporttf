@@ -160,6 +160,11 @@ aws ec2 describe-instances \
   --output table
 ```
 
+Run the AWS CLI discovery command from the operator workstation or another
+principal with EC2 read permissions. The EC2 instance role is intended for
+pipeline S3/SQS/SNS access; if it must run this command too, the Terraform
+policy grants it `ec2:DescribeInstances`.
+
 Connect to EC2:
 
 ```bash
@@ -189,6 +194,9 @@ git pull --ff-only origin master
 Create the Python 3.9 environment on a fresh instance:
 
 ```bash
+git status --short
+git pull --ff-only origin master
+grep -E '^(boto3|botocore|streamlit)' requirements.txt
 python3 -m venv kpidatatf
 source kpidatatf/bin/activate
 python -m pip install --upgrade pip
@@ -210,6 +218,31 @@ The EC2 `.env` needs the AWS values used by the poller:
 AWS_REGION=ap-south-1
 S3_BUCKET=<AWS bucket name>
 SQS_QUEUE_URL=<SQS queue URL>
+```
+
+These are AWS resource identifiers, not Garage credentials. Obtain the exact
+values from the Terraform workstation and create the EC2 environment file:
+
+```bash
+# Run on the Terraform workstation
+terraform -chdir=infra/terraform output -raw bucket_name
+terraform -chdir=infra/terraform output -raw sqs_queue_url
+```
+
+On EC2, write those values to `/home/ec2-user/ilds_s3_garage_uploader_project/.env`:
+
+```dotenv
+AWS_REGION=ap-south-1
+S3_BUCKET=<Terraform bucket_name output>
+SQS_QUEUE_URL=<Terraform sqs_queue_url output>
+```
+
+The EC2 poller service loads this file automatically. After changing it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ec2-sqs-poller
+sudo systemctl status ec2-sqs-poller --no-pager
 ```
 
 The recommended split deployment does not run Garage sync on EC2. Do not put Garage credentials on EC2 unless EC2 has a Tailscale route and is intentionally running the Garage sync service.
@@ -364,9 +397,22 @@ In the **Timestamp reliability** table:
 - `stale` means the last sensor timestamp is more than three expected intervals
   old, with a minimum threshold of 60 seconds.
 
+The live SQS report also exposes the PDF-aligned ingestion gates:
+
+- **Freshness**: `90-min accepted` is false when the newest sensor sample is
+  more than 90 minutes old. This is the real-time processing cutoff.
+- **Frequency check**: compares observed cadence with the 100 Hz sensor target.
+- **6-min window**: confirms that the CSV contains at least 36,000 samples,
+  the minimum analysis window at 100 Hz.
+- **Queue wait (sec)**: time from the SQS `SentTimestamp` to EC2 processing;
+  this is separate from S3 download/processing latency.
+- **Heartbeat**: each accepted upload marks its sensor `ACTIVE`; the intended
+  heartbeat timeout is 15 minutes without a new upload.
+
 The dashboard's `Avg latency` and `P95 latency` cards measure S3 download and
 EC2 processing latency. `Arrival delay` measures sensor timestamp freshness;
-these are different signals and should be investigated separately.
+`Queue wait` measures time spent before EC2 starts processing. These are
+different signals and should be investigated separately.
 
 ## 8. KPI Report Verification
 
@@ -536,6 +582,78 @@ source kpidatatf/bin/activate
 python -m pip install -r requirements.txt
 python -c "import boto3; print('boto3 OK')"
 ```
+
+### Garage integration test says `GARAGE_ACCESS_KEY_ID is not set`
+
+This test runs on the Tailscale-connected workstation, not on EC2. Add the
+Garage credentials to the local `.env` only; do not copy them to EC2 in the
+split deployment:
+
+```dotenv
+GARAGE_ENDPOINT_URL=http://100.78.2.20:3900
+GARAGE_S3_BUCKET=data
+GARAGE_ACCESS_KEY_ID=<Garage access key>
+GARAGE_SECRET_ACCESS_KEY=<Garage secret key>
+```
+
+Then rerun:
+
+```bash
+./scripts/test_garage_integration.sh
+```
+
+### EC2 install says `boto3==1.43.85` requires Python 3.10
+
+The EC2 deployment uses Python 3.9. The repository-compatible pins are
+`boto3==1.28.0` and `botocore==1.31.0`; `boto3==1.43.85` is from a stale or
+locally modified requirements file. From the project root, verify the checkout
+before recreating the environment:
+
+```bash
+git status --short
+git pull --ff-only origin master
+grep -E '^(boto3|botocore)' requirements.txt
+```
+
+The command must print:
+
+```text
+boto3==1.28.0
+botocore==1.31.0
+```
+
+If `git pull` reports local changes, preserve them before pulling as described
+in the Git troubleshooting section. Then recreate the failed environment and
+install using its interpreter explicitly:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf kpidatatf
+python3 -m venv kpidatatf
+kpidatatf/bin/python -m pip install --upgrade pip
+kpidatatf/bin/python -m pip install -r requirements.txt
+kpidatatf/bin/python -c "import boto3, streamlit; print('boto3', boto3.__version__); print('streamlit', streamlit.__version__)"
+```
+
+Do not install the latest boto3 on this Python 3.9 deployment. Upgrade the
+instance to Python 3.10+ first if newer AWS SDK versions are required.
+
+If `git pull --ff-only` reports that the branches have diverged after a remote
+history rewrite, first confirm that there are no tracked local changes. Then
+align the EC2 checkout to the remote branch:
+
+```bash
+git status --short
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "STOP: preserve tracked changes first"
+  exit 1
+fi
+git reset --hard origin/master
+grep -E '^(boto3|botocore)' requirements.txt
+```
+
+Only continue when the pins are `boto3==1.28.0` and `botocore==1.31.0`, then
+repeat the environment recreation commands above.
 
 ### Git pull refuses because of local changes
 

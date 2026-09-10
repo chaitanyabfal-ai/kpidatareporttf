@@ -41,8 +41,8 @@ provisioned — either with the bash script or Terraform, your choice.
   https://developer.hashicorp.com/terraform/install if missing)
 
 ```bash
-git clone https://github.com/chaitanyabfal-ai/kpidataingestreport.git
-cd kpidataingestreport
+git clone https://github.com/chaitanyabfal-ai/kpidatareporttf.git
+cd kpidatareporttf
 python3 -m venv kpidatatf
 source kpidatatf/bin/activate      # Windows: kpidatatf\Scripts\activate
 pip install --upgrade pip

@@ -548,7 +548,7 @@ sudo yum update -y
 sudo yum install -y git python3 python3-pip python3-devel gcc
 
 # Clone project
-git clone https://github.com/chaitanyabfal-ai/kpidataingestreport.git
+git clone https://github.com/chaitanyabfal-ai/kpidatareporttf.git
 cd ilds_s3_garage_uploader_project
 
 # Setup Python

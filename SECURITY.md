@@ -47,7 +47,7 @@ git init
 git add -A                      # .gitignore in this package now excludes
                                  # .env, *.pem, and the bulk CSVs
 git commit -m "Rebuild history without committed secrets"
-git remote add origin https://github.com/chaitanyabfal-ai/kpidataingestreport.git
+git remote add origin https://github.com/chaitanyabfal-ai/kpidatareporttf.git
 git push --force origin master  # rewrites the public history
 ```
 

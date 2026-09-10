@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/home/ec2-user/ilds_s3_garage_uploader_project
+EnvironmentFile=-/home/ec2-user/ilds_s3_garage_uploader_project/.env
 Environment="PATH=/home/ec2-user/ilds_s3_garage_uploader_project/kpidatatf/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 ExecStart=/home/ec2-user/ilds_s3_garage_uploader_project/scripts/ec2_sqs_kpi_poller.sh
 Restart=on-failure

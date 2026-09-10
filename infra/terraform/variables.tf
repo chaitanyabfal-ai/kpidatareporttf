@@ -69,7 +69,7 @@ variable "ssh_cidr" {
 variable "repo_url" {
   description = "Git URL the EC2 instance clones on boot."
   type        = string
-  default     = "https://github.com/chaitanyabfal-ai/kpidataingestreport.git"
+  default     = "https://github.com/chaitanyabfal-ai/kpidatareporttf.git"
 }
 
 variable "deploy_user" {

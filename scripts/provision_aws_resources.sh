@@ -40,7 +40,7 @@ EC2_KEY_NAME="${EC2_KEY_NAME:-}"          # leave empty to launch without SSH ke
 EC2_SECURITY_GROUP_NAME="${EC2_SECURITY_GROUP_NAME:-ilds-kpi-sg}"
 EC2_ROLE_NAME="${EC2_ROLE_NAME:-ilds-ec2-role}"
 EC2_INSTANCE_PROFILE_NAME="${EC2_INSTANCE_PROFILE_NAME:-ilds-ec2-profile}"
-REPO_URL="${REPO_URL:-https://github.com/chaitanyabfal-ai/kpidataingestreport.git}"
+REPO_URL="${REPO_URL:-https://github.com/chaitanyabfal-ai/kpidatareporttf.git}"
 DEPLOY_USER="${DEPLOY_USER:-ec2-user}"     # must match systemd/*.service User=
 
 echo "=== ILDS AWS Provisioning ==="

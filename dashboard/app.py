@@ -134,8 +134,13 @@ def reliability_frame(reports: list[dict[str, Any]]) -> pd.DataFrame:
                     "Expected interval (sec)": reliability.get("expected_interval_seconds"),
                     "Max gap (sec)": reliability.get("max_gap_seconds"),
                     "Arrival delay (sec)": reliability.get("arrival_delay_seconds"),
+                    "Queue wait (sec)": item.get("queue_latency_seconds"),
                     "Gaps": reliability.get("gap_count", 0),
                     "Out of order": reliability.get("out_of_order_count", 0),
+                    "Freshness": reliability.get("freshness", {}).get("status", "unknown"),
+                    "90-min accepted": reliability.get("freshness", {}).get("accepted", False),
+                    "Frequency check": reliability.get("sampling", {}).get("frequency_status", "unknown"),
+                    "6-min window": reliability.get("sampling", {}).get("minimum_window_met", False),
                     "Status": reliability.get("timestamp_status", "unknown"),
                     "Last sample": reliability.get("last_sample_at"),
                 }
@@ -220,11 +225,13 @@ if not reliability.empty:
     stale_count = int((reliability["Status"] == "stale").sum())
     median_frequency = reliability["Frequency (Hz)"].dropna().median()
     max_delay = reliability["Arrival delay (sec)"].dropna().max()
-    reliability_metrics = st.columns(4)
+    median_queue_wait = reliability["Queue wait (sec)"].dropna().median()
+    reliability_metrics = st.columns(5)
     reliability_metrics[0].metric("Sensors reporting", f"{reliability['Sensor'].nunique()}")
     reliability_metrics[1].metric("Healthy streams", f"{healthy_count}/{len(reliability)}")
     reliability_metrics[2].metric("Median frequency", f"{median_frequency:.3f} Hz" if pd.notna(median_frequency) else "n/a")
     reliability_metrics[3].metric("Max sample delay", f"{max_delay:.1f} sec" if pd.notna(max_delay) else "n/a", delta=f"{stale_count} stale" if stale_count else None, delta_color="inverse")
+    reliability_metrics[4].metric("Median queue wait", f"{median_queue_wait:.1f} sec" if pd.notna(median_queue_wait) else "n/a")
 
 st.markdown("## Delivery pulse")
 chart_left, chart_right = st.columns([1.65, 1])

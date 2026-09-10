@@ -47,6 +47,12 @@ data "aws_iam_policy_document" "ec2_permissions" {
     actions   = ["sns:Publish", "sns:Subscribe"]
     resources = [aws_sns_topic.s3_events.arn]
   }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "ec2" {

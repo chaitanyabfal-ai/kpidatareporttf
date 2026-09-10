@@ -32,13 +32,13 @@ import time
 import traceback
 from pathlib import Path
 from urllib.parse import unquote_plus
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 import boto3
 import pandas as pd
 from botocore.exceptions import ClientError
-from scripts.reliability import summarize_timestamp_reliability
+from scripts.reliability import summarize_heartbeat, summarize_timestamp_reliability
 
 # Load .env if present
 env_file = Path('.env')
@@ -55,6 +55,21 @@ bucket_name = os.environ.get('BUCKET_NAME') or os.environ.get('S3_BUCKET')
 work_dir = os.environ.get('WORK_DIR', './data/ec2_queue_kpi_worker')
 report_dir = os.environ.get('REPORT_DIR', './data/kpi_reports')
 window_dir = os.environ.get('WINDOW_DIR', './data/kpi_reports/windows')
+
+missing_config = [
+    name for name, value in {
+        "AWS_REGION": aws_region,
+        "SQS_QUEUE_URL (or QUEUE_URL)": queue_url,
+        "S3_BUCKET (or BUCKET_NAME)": bucket_name,
+    }.items()
+    if not value
+]
+if missing_config:
+    raise SystemExit(
+        "[POLLER] Missing required configuration: "
+        + ", ".join(missing_config)
+        + ". Set these values in .env and restart ec2-sqs-poller."
+    )
 
 sqs = boto3.client("sqs", region_name=aws_region)
 s3 = boto3.client("s3", region_name=aws_region)
@@ -199,7 +214,7 @@ def infer_sensor_from_key(key: str) -> str:
         return "BFA12"
     return "UNKNOWN"
 
-def compute_file_metrics(csv_path: Path):
+def compute_file_metrics(csv_path: Path, observed_at=None):
     df = pd.read_csv(csv_path)
     results = {
         "file": csv_path.name,
@@ -211,7 +226,7 @@ def compute_file_metrics(csv_path: Path):
         "max_voltage": None,
         "min_pressure": None,
         "max_pressure": None,
-        "timestamp_reliability": summarize_timestamp_reliability(df),
+        "timestamp_reliability": summarize_timestamp_reliability(df, observed_at=observed_at),
     }
 
     if "Voltage" in df.columns:
@@ -279,12 +294,20 @@ while True:
         "bucket": bucket_name,
         "files_processed": [],
         "total_files": 0,
+        "queue_latency_seconds": [],
+        "heartbeat_by_sensor": {},
     }
 
     for message in messages:
         message_id = message.get("MessageId", "unknown")
         body = message.get("Body", "")
         receipt_handle = message["ReceiptHandle"]
+        sent_timestamp_ms = message.get("Attributes", {}).get("SentTimestamp")
+        sent_at = (
+            datetime.fromtimestamp(int(sent_timestamp_ms) / 1000, tz=timezone.utc)
+            if sent_timestamp_ms and str(sent_timestamp_ms).isdigit()
+            else None
+        )
 
         try:
             notifications = parse_notifications(body)
@@ -306,11 +329,22 @@ while True:
 
                     local_path = work_dir / Path(key).name
                     s3.download_file(bucket, key, str(local_path))
-                    metrics = compute_file_metrics(local_path)
+                    process_started_at = datetime.now(timezone.utc)
+                    metrics = compute_file_metrics(local_path, observed_at=process_started_at)
                     seen.add(key)
 
                     # Infer sensor from key
                     sensor = infer_sensor_from_key(key)
+                    metrics["sensor"] = sensor
+                    if sent_at is not None:
+                        queue_latency_seconds = max(0.0, (process_started_at - sent_at).total_seconds())
+                        metrics["queue_latency_seconds"] = round(queue_latency_seconds, 3)
+                        batch_summary["queue_latency_seconds"].append(queue_latency_seconds)
+                    else:
+                        metrics["queue_latency_seconds"] = None
+                    batch_summary["heartbeat_by_sensor"][sensor] = summarize_heartbeat(
+                        process_started_at, process_started_at
+                    )
 
                     # Track processing
                     process_end = time.time()
