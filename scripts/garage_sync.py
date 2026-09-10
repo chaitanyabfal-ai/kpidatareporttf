@@ -234,7 +234,15 @@ def download_new_csvs():
     """Download new CSV files from Garage S3 and upload to AWS S3."""
     try:
         print(f"[GARAGE] Listing objects in bucket '{GARAGE_S3_BUCKET}'...", flush=True)
-        response = garage_s3.list_objects_v2(Bucket=GARAGE_S3_BUCKET)
+        response = {
+            "Contents": [
+                obj
+                for page in garage_s3.get_paginator("list_objects_v2").paginate(
+                    Bucket=GARAGE_S3_BUCKET
+                )
+                for obj in page.get("Contents", [])
+            ]
+        }
 
         if "Contents" not in response:
             print(f"[GARAGE] Bucket is empty", flush=True)

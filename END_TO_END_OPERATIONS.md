@@ -341,6 +341,10 @@ aws s3 ls "s3://${S3_BUCKET}/" --recursive --region "${AWS_REGION}"
 
 ### 6.4 Start continuous Garage sync
 
+Run this section on the Tailscale-connected local workstation, not on EC2.
+EC2 intentionally does not receive Garage credentials and should not run
+`garage_sync.py` in the split deployment.
+
 After the one-time cycle succeeds:
 
 ```bash
